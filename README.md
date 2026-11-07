@@ -4,4 +4,4 @@ Interactive walkthrough of a generative-AI clinician assistant for home care: a 
 
 Built for INS646 (AI for Big Data), College of Technological Innovation, Zayed University, by Noof Almarar, Saeed Alremeithi and Fatma Alhai. Patients and values are illustrative; drafts are pre-written to simulate model output.
 
-Live demo: https://nouffalmarar8.github.io/clinicalassistant/
+Live demo: https://nouffalmarar8.github.io/CLINICALASSISTANT/
