@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Home care clinician assistant demo: from a frailty alert to a clinician-approved bilingual draft, with automatic and clinician safety gates.">
+<title>Clinician Assistant · Demo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Naskh+Arabic:wght@400;500&display=swap">
+<style>
+/* Layout: a left rail of alerts, a six-step pipeline strip, one working panel that changes per step. Clinical dashboard register. */
+:root{
+  --bg:#f6f7f5; --panel:#ffffff; --fg:#1c2430; --muted:#5e6a78; --line:#d9ded8;
+  --accent:#0f6e73; --accent-soft:#e2f0ef; --warn:#b4531b; --warn-soft:#fbeadf;
+  --ok:#2d7a3e; --ok-soft:#e3f1e5; --flag:#a83232; --flag-soft:#f8e2e2;
+  --src1:#d6e9f8; --src2:#e9e3f6; --src3:#fbe8d0;
+  --sans:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace; --ar:"Noto Naskh Arabic","IBM Plex Sans",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121619; --panel:#1b2126; --fg:#e6e9ea; --muted:#9aa5ad; --line:#2d363c;
+  --accent:#5fc4c8; --accent-soft:#17353a; --warn:#f0a05f; --warn-soft:#3b2a1c;
+  --ok:#7ccf8c; --ok-soft:#1d3523; --flag:#f08a8a; --flag-soft:#3f2424;
+  --src1:#213a4d; --src2:#312a47; --src3:#4a3620; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121619; --panel:#1b2126; --fg:#e6e9ea; --muted:#9aa5ad; --line:#2d363c;
+  --accent:#5fc4c8; --accent-soft:#17353a; --warn:#f0a05f; --warn-soft:#3b2a1c;
+  --ok:#7ccf8c; --ok-soft:#1d3523; --flag:#f08a8a; --flag-soft:#3f2424;
+  --src1:#213a4d; --src2:#312a47; --src3:#4a3620; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.5;margin:0;
+  padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1100px;margin:0 auto;display:grid;gap:18px}
+header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+header h1{font-size:20px;font-weight:600;margin:0}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.layout{display:grid;grid-template-columns:260px 1fr;gap:18px}
+@media(max-width:760px){.layout{grid-template-columns:1fr}}
+.rail,.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.rail{padding:12px;display:grid;gap:8px;align-content:start}
+.alert{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:10px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.alert:hover{border-color:var(--accent)}
+.alert[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.alert .name{font-weight:600}
+.alert .sub{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.score{font-family:var(--mono);font-size:13px;padding:1px 7px;border-radius:3px;align-self:start}
+.score.high{background:var(--flag-soft);color:var(--flag)}
+.score.med{background:var(--warn-soft);color:var(--warn)}
+.steps{display:flex;gap:4px;padding:10px 12px;border-bottom:1px solid var(--line);overflow-x:auto}
+.step{flex:1 0 auto;border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;padding:6px 10px;border-radius:4px;cursor:pointer;white-space:nowrap}
+.step b{font-family:var(--mono);font-weight:500;margin-right:6px}
+.step[aria-current="step"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.step:disabled{opacity:.45;cursor:default}
+.body{padding:18px;display:grid;gap:16px;min-width:0}
+.body h2{font-size:17px;margin:0;font-weight:600;text-wrap:balance}
+.body p.lead{margin:0;color:var(--muted);max-width:65ch}
+.kv{display:grid;grid-template-columns:auto 1fr auto;gap:6px 14px;font-size:14px}
+.kv .k{color:var(--muted)}
+.kv .d{font-family:var(--mono);font-size:13px}
+.kv .d.up{color:var(--flag)} .kv .d.down{color:var(--flag)} .kv .d.ok{color:var(--muted)}
+.doc{border:1px solid var(--line);border-radius:4px;padding:12px;display:grid;gap:6px}
+.doc .t{font-weight:600;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tag{font-family:var(--mono);font-size:11px;padding:1px 6px;border-radius:3px;background:var(--accent-soft);color:var(--accent)}
+.tag.src1{background:var(--src1);color:var(--fg)} .tag.src2{background:var(--src2);color:var(--fg)} .tag.src3{background:var(--src3);color:var(--fg)}
+.doc .meta{font-size:12px;color:var(--muted)}
+.doc .q{font-size:14px;border-left:3px solid var(--line);padding-left:10px;margin:0}
+.doc.skip{opacity:.55}
+.prompt{font-family:var(--mono);font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:14px;margin:0}
+.prompt .v{background:var(--accent-soft);color:var(--accent);padding:0 3px;border-radius:2px}
+.prompt .r{background:var(--src1);padding:0 3px;border-radius:2px}
+.out{display:grid;gap:12px}
+.out .blk{border:1px solid var(--line);border-radius:4px;padding:12px;display:grid;gap:6px}
+.out .blk .l{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.out .txt{margin:0;max-width:70ch}
+.out .ar{direction:rtl;text-align:right;font-family:var(--ar);font-size:17px;line-height:1.9;max-width:none}
+.s{padding:0 2px;border-radius:2px;border-bottom:2px solid transparent}
+.s.g1{border-color:var(--src1)} .s.g2{border-color:var(--src2)} .s.g3{border-color:var(--src3)}
+.chk .s{background:var(--ok-soft)}
+.chk .s.bad{background:var(--flag-soft);border-color:var(--flag)}
+.chk .s.g1{background:var(--src1)} .chk .s.g2{background:var(--src2)} .chk .s.g3{background:var(--src3)}
+sup{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.checks{display:grid;gap:8px}
+.check{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:10px;border:1px solid var(--line);border-radius:4px}
+.check .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:600}
+.check .ic.pass{background:var(--ok-soft);color:var(--ok)}
+.check .ic.fail{background:var(--flag-soft);color:var(--flag)}
+.check .ic.wait{background:var(--warn-soft);color:var(--warn)}
+.check .n{font-weight:600} .check .why{font-size:13px;color:var(--muted)}
+.check .res{font-family:var(--mono);font-size:12px}
+.verdict{padding:12px 14px;border-radius:4px;font-weight:500}
+.verdict.ok{background:var(--ok-soft);color:var(--ok)}
+.verdict.bad{background:var(--flag-soft);color:var(--flag)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:inherit;font-weight:500;padding:8px 14px;border-radius:4px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{color:var(--flag);border-color:var(--flag)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn:focus-visible,.step:focus-visible,.alert:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.nav{display:flex;justify-content:space-between;gap:8px;padding-top:6px;border-top:1px solid var(--line)}
+.log{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:10px;margin:0;white-space:pre-wrap}
+.note{font-size:12px;color:var(--muted)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.legend .l1::before{background:var(--src1)} .legend .l2::before{background:var(--src2)} .legend .l3::before{background:var(--src3)} .legend .lx::before{background:var(--flag-soft);border:1px solid var(--flag)}
+@media(prefers-reduced-motion:no-preference){.body{animation:fade .18s ease}}
+@keyframes fade{from{opacity:.4}to{opacity:1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Home Care · Clinician assistant · Demo</div>
+      <h1>From a frailty alert to a clinician-approved draft</h1>
+    </div>
+    <div class="note">Illustrative patients and values. Drafts are pre-written to simulate model output.</div>
+  </header>
+
+  <div class="layout">
+    <aside class="rail" id="rail" aria-label="This week's alerts">
+      <div class="eyebrow">This week's alerts</div>
+    </aside>
+
+    <section class="panel">
+      <nav class="steps" id="steps" aria-label="Pipeline steps"></nav>
+      <div class="body" id="body"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const ALERTS=[
+ {id:"a1",mrn:"10482",name:"Khalifa M.",age:78,sex:"male",site:"Al Ain",device:"WHOOP MG",lang:"Arabic",score:0.81,prev:0.52,level:"high",
+  factors:[["Daily steps, 14-day","−41%","down"],["Resting heart rate","+9 bpm","up"],["Sleep duration","−1.3 h","down"],["Medications","9 active","up"],["Recent fall (6 mo)","Yes","up"]],
+  record:["Fall recorded May 2026, no fracture","9 active medications; sedative added Sep 2026","Lives with daughter; prefers Arabic"],
+  retrieve:[
+   {k:1,t:"SEHA Home Care Protocol: Falls prevention in older adults",v:"v3.2 (2025)",owner:"Geriatrics lead",rev:"Reviewed 2025-11",q:"Where a fall has occurred in the last 12 months, advise the patient to keep walkways clear of obstacles and to use handrails on stairs; arrange a home visit within one week of any new mobility decline.",hit:true},
+   {k:2,t:"DoH Abu Dhabi guidance: Sleep and medication review",v:"2024",owner:"Pharmacy lead",rev:"Reviewed 2026-03",q:"A new sedative combined with reduced sleep and reduced activity should prompt a medication review by the home care physician.",hit:true},
+   {k:3,t:"Approved patient leaflet (AR/EN): When to call us",v:"2025",owner:"Patient education",rev:"Reviewed 2026-01",q:"Call the home care line if you fall, feel dizzy, or feel short of breath.",hit:true},
+   {k:0,t:"SEHA protocol: Diabetic foot care",v:"2024",owner:"",rev:"",q:"",hit:false}
+  ],
+  nurse:[["Risk moved from 0.52 to 0.81 this week, driven by a 41% drop in daily steps, a higher resting heart rate and less sleep.",0],["He had a fall in May 2026 and a sedative was added in September, which together match the pattern that calls for a medication review.",2],["A home visit focused on mobility, balance and the September medication change is suggested.",1]],
+  en:[["Your care team noticed you have been walking less recently and sleeping a little less.",0],["A nurse will visit you this week.",1],["Until then, keep the floors clear of obstacles and hold the handrail on the stairs.",1],["Call us on [number] if you fall, feel dizzy or feel short of breath.",3],["This message was prepared with AI support and reviewed by your care team.",0]],
+  ar:[["لاحظ فريق الرعاية أنك تمشي أقل من المعتاد مؤخراً وتنام أقل قليلاً.",0],["ستزورك ممرضة هذا الأسبوع.",1],["وحتى ذلك الحين، يُرجى إبقاء الأرضية خالية من العوائق والإمساك بالدرابزين عند استخدام الدرج.",1],["اتصل بنا على [الرقم] إذا سقطت أو شعرت بالدوار أو بضيق في التنفس.",3],["أُعدّت هذه الرسالة بمساعدة الذكاء الاصطناعي وراجعها فريق الرعاية.",0]],
+  checks:[["Grounded in sources","Every sentence maps to the record or a retrieved passage","3 / 3 sources used","pass"],["Safety screen","No medication names, doses or diagnoses; tone not alarming","pass","pass"],["No PHI outside record","Names and values appear only where the record supplies them","pass","pass"],["Reading level","EN ≈ grade 6; AR short sentences, no clinical terms","pass","pass"],["Length","Patient text 58 words EN, under 120","pass","pass"]],
+  blocked:false
+ },
+ {id:"a2",mrn:"10517",name:"Mariam S.",age:83,sex:"female",site:"Abu Dhabi",device:"WHOOP MG",lang:"Arabic",score:0.68,prev:0.49,level:"med",
+  factors:[["Daily steps, 14-day","−40%","down"],["Resting heart rate","+2 bpm","ok"],["Sleep duration","+0.1 h","ok"],["Medications","5 active","ok"],["Recent fall (6 mo)","Yes, 3 weeks ago","up"]],
+  record:["Fall recorded 3 weeks ago, bruising only","5 active medications, no recent change","Lives alone; daughter visits daily; prefers Arabic"],
+  retrieve:[
+   {k:1,t:"SEHA Home Care Protocol: Falls prevention in older adults",v:"v3.2 (2025)",owner:"Geriatrics lead",rev:"Reviewed 2025-11",q:"Where a fall has occurred in the last 12 months, advise the patient to keep walkways clear of obstacles and to use handrails on stairs; arrange a home visit within one week of any new mobility decline.",hit:true},
+   {k:2,t:"Approved patient leaflet (AR/EN): When to call us",v:"2025",owner:"Patient education",rev:"Reviewed 2026-01",q:"Call the home care line if you fall, feel dizzy, or feel short of breath.",hit:true},
+   {k:0,t:"DoH Abu Dhabi guidance: Sleep and medication review",v:"2024",owner:"",rev:"",q:"",hit:false},
+   {k:0,t:"SEHA protocol: Diabetic foot care",v:"2024",owner:"",rev:"",q:"",hit:false}
+  ],
+  nurse:[["Risk moved to medium-high this week: less walking and more sitting after a fall three weeks ago.",0],["Heart rate, sleep and medications are unchanged, so the decline looks activity-related rather than a new medical change.",0],["A home visit this week focused on mobility and confidence after the fall is suggested.",1]],
+  en:[["Your care team noticed you have been walking less recently.",0],["A nurse will visit you this week.",1],["Until then, keep the floors clear and hold the handrail on the stairs.",1],["Call us on [number] if you fall or feel dizzy.",2],["This message was prepared with AI support and reviewed by your care team.",0]],
+  ar:[["لاحظ فريق الرعاية أنكِ تمشين أقل من المعتاد مؤخراً.",0],["ستزوركِ ممرضة هذا الأسبوع.",1],["وحتى ذلك الحين، يُرجى إبقاء الأرضية خالية من العوائق والإمساك بالدرابزين عند استخدام الدرج.",1],["اتصلي بنا على [الرقم] إذا سقطتِ أو شعرتِ بالدوار.",2],["أُعدّت هذه الرسالة بمساعدة الذكاء الاصطناعي وراجعها فريق الرعاية.",0]],
+  checks:[["Grounded in sources","Every sentence maps to the record or a retrieved passage","2 / 2 sources used","pass"],["Safety screen","No medication names, doses or diagnoses; tone not alarming","pass","pass"],["No PHI outside record","Names and values appear only where the record supplies them","pass","pass"],["Reading level","EN ≈ grade 5; AR short sentences","pass","pass"],["Length","Patient text 49 words EN, under 120","pass","pass"]],
+  blocked:false
+ },
+ {id:"a3",mrn:"10633",name:"Noura H.",age:85,sex:"female",site:"Al Ain",device:"Other device",lang:"English",score:0.47,prev:0.44,level:"med",
+  factors:[["Daily steps, 14-day","no data, 9 days","up"],["Resting heart rate","no data, 9 days","up"],["Sleep duration","no data, 9 days","up"],["Medications","6 active","ok"],["Recent fall (6 mo)","No","ok"]],
+  record:["Wearable not synced since 25 Oct; device type not on the approved list","6 active medications, no recent change","Lives with son; prefers English"],
+  retrieve:[
+   {k:1,t:"SEHA Home Care Protocol: Wearable data gaps",v:"v1.1 (2026)",owner:"Technical owner",rev:"Reviewed 2026-06",q:"If a device has not synced for more than 7 days, the risk score is unreliable. Contact the household to restore the device before acting on the score.",hit:true},
+   {k:2,t:"Approved patient leaflet (AR/EN): When to call us",v:"2025",owner:"Patient education",rev:"Reviewed 2026-01",q:"Call the home care line if you fall, feel dizzy, or feel short of breath.",hit:true},
+   {k:0,t:"SEHA Home Care Protocol: Falls prevention in older adults",v:"v3.2",owner:"",rev:"",q:"",hit:false},
+   {k:0,t:"DoH Abu Dhabi guidance: Sleep and medication review",v:"2024",owner:"",rev:"",q:"",hit:false}
+  ],
+  nurse:[["The score rose slightly, but the wearable has not synced for nine days, so the activity, heart-rate and sleep inputs are missing.",0],["Under the data-gap protocol the score is unreliable until the device is restored, so the first step is a call to the household rather than a clinical action.",1],["The gap is most likely because the patient had a fall and stopped wearing the device.",-1]],
+  en:[["Your care team noticed that your wearable has not sent us any readings for nine days.",0],["We will call you to help get it working again.",1],["Call us on [number] if you fall, feel dizzy or feel short of breath.",2],["This message was prepared with AI support and reviewed by your care team.",0]],
+  ar:null,
+  checks:[["Grounded in sources","One nurse-note sentence has no support in the record or retrieved passages","2 / 3 nurse sentences grounded","fail"],["Safety screen","No medication names or doses; but an unsupported cause is asserted","fail","fail"],["No PHI outside record","pass","pass","pass"],["Reading level","EN ≈ grade 5","pass","pass"],["Length","Patient text 43 words EN, under 120","pass","pass"]],
+  blocked:true
+ }
+];
+
+const STEPS=[["1","Alert"],["2","Retrieve"],["3","Prompt"],["4","Generate"],["5","Check"],["6","Review"]];
+let cur=ALERTS[0], step=0, decision=null;
+
+const rail=document.getElementById("rail"), stepsEl=document.getElementById("steps"), body=document.getElementById("body");
+
+function renderRail(){
+  rail.querySelectorAll(".alert").forEach(e=>e.remove());
+  ALERTS.forEach(a=>{
+    const b=document.createElement("button");b.className="alert";b.type="button";b.setAttribute("aria-pressed",a===cur);
+    b.innerHTML=`<span class="name">${a.name}</span><span class="score ${a.level}">${a.score.toFixed(2)}</span><span class="sub">Age ${a.age} · ${a.site} · ${a.device}</span>`;
+    b.onclick=()=>{cur=a;step=0;decision=null;renderAll();};
+    rail.appendChild(b);
+  });
+}
+function renderSteps(){
+  stepsEl.innerHTML="";
+  STEPS.forEach(([n,l],i)=>{
+    const b=document.createElement("button");b.className="step";b.type="button";b.innerHTML=`<b>${n}</b>${l}`;
+    if(i===step)b.setAttribute("aria-current","step");
+    if(i===5&&cur.blocked)b.disabled=true;
+    b.onclick=()=>{if(!b.disabled){step=i;renderAll();}};
+    stepsEl.appendChild(b);
+  });
+}
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+function sent(list,chk){
+  return list.map(([t,src])=>{
+    const bad=src<0, g=src>0?`g${src}`:"";
+    const sup=bad?`<sup>?</sup>`:src>0?`<sup>[${src}]</sup>`:`<sup>[rec]</sup>`;
+    return `<span class="s ${g} ${bad?"bad":""}">${esc(t)}${chk?sup:""}</span>`;
+  }).join(" ");
+}
+function nav(){
+  return `<div class="nav"><button class="btn" id="prev" ${step===0?"disabled":""}>Back</button><button class="btn primary" id="next" ${(step===5||(step===4&&cur.blocked))?"disabled":""}>${step===4?"Send to clinician":"Next"}</button></div>`;
+}
+function renderBody(){
+  const a=cur; let h="";
+  if(step===0){
+    h=`<h2>Step 1 · The frailty alert arrives</h2><p class="lead">This is the output of the Seminar 1 model: a 90-day risk score and the factors behind it. Nothing has been written yet.</p>
+    <div class="kv"><span class="k">Patient</span><span>${a.name}, ${a.age}, ${a.sex}, ${a.site}, ${a.record[2].split(";")[0].toLowerCase()}</span><span class="d">MRN ${a.mrn}</span>
+    <span class="k">90-day risk</span><span>${a.score.toFixed(2)} (was ${a.prev.toFixed(2)} last week)</span><span class="d ${a.level==="high"?"up":"ok"}">${a.level.toUpperCase()}</span>
+    ${a.factors.map(([k,v,c])=>`<span class="k">${k}</span><span></span><span class="d ${c}">${v}</span>`).join("")}</div>
+    <div class="eyebrow">What the pipeline does next</div><p class="lead">The alert triggers the generation stage automatically. It carries the score, the contributing factors, and the patient's preferred language (${a.lang}) into the next step.</p>`;
+  }
+  if(step===1){
+    h=`<h2>Step 2 · Retrieve the relevant SEHA documents</h2><p class="lead">The knowledge base is searched for passages that match this alert's factors. Only current, approved versions are eligible. Passages that don't match are left out.</p>
+    <div class="eyebrow">Patient record (always included)</div>
+    <div class="doc"><div class="t"><span class="tag">rec</span>Patient record, updated this week</div>${a.record.map(r=>`<p class="q">${esc(r)}</p>`).join("")}</div>
+    <div class="eyebrow">Knowledge base search</div>
+    ${a.retrieve.map(d=>d.hit?`<div class="doc"><div class="t"><span class="tag src${d.k}">[${d.k}]</span>${esc(d.t)}<span class="meta">${d.v}</span></div><div class="meta">Owner: ${d.owner} · ${d.rev}</div><p class="q">${esc(d.q)}</p></div>`
+      :`<div class="doc skip"><div class="t"><span class="tag">skip</span>${esc(d.t)}<span class="meta">${d.v}</span></div><div class="meta">Not relevant to this alert's factors</div></div>`).join("")}`;
+  }
+  if(step===2){
+    const srcs=a.retrieve.filter(d=>d.hit).map(d=>`[${d.k}] ${d.q}`).join("\n");
+    h=`<h2>Step 3 · Assemble the prompt</h2><p class="lead">The versioned template is filled with the alert values and the retrieved passages. The model sees only this. Highlighted parts are inserted; everything else is the fixed, clinically approved template.</p>
+    <pre class="prompt">Template: explain-v1.4 · Model: claude-opus-5-5 · KB snapshot: 2026-10-13
+
+Use only the patient record and the retrieved SEHA documents.
+Do not name medications, doses, or diagnoses; if information is missing, say so.
+
+Alert: <span class="v">${a.score.toFixed(2)}</span>, <span class="v">${esc(a.factors.map(f=>f[0]+" "+f[1]).join("; "))}</span>
+Patient: <span class="v">${a.age}</span>, <span class="v">${a.lang}</span>
+Record: <span class="v">${esc(a.record.join(" | "))}</span>
+Sources:
+<span class="r">${esc(srcs)}</span>
+
+Task: explain the alert to the nurse in three sentences, then write
+patient instructions in <span class="v">${a.lang}</span> and English, under 120 words each,
+ending with the AI-assistance statement.</pre>`;
+  }
+  if(step===3){
+    h=`<h2>Step 4 · The model generates a draft</h2><p class="lead">Three outputs come back. Underlines show which source each sentence drew on; the next step verifies that.</p>
+    <div class="legend"><span class="l1">[1]</span><span class="l2">[2]</span><span class="l3">[3]</span><span>no underline = patient record</span></div>
+    <div class="out">
+      <div class="blk"><div class="l">For the nurse</div><p class="txt">${sent(a.nurse,false)}</p></div>
+      <div class="blk"><div class="l">Patient · English</div><p class="txt">${sent(a.en,false)}</p></div>
+      ${a.ar?`<div class="blk"><div class="l">Patient · Arabic</div><p class="txt ar">${sent(a.ar,false)}</p></div>`:`<div class="blk"><div class="l">Patient · Arabic</div><p class="txt note">Not generated: patient prefers English.</p></div>`}
+    </div>`;
+  }
+  if(step===4){
+    h=`<h2>Step 5 · Automatic checks (gate 1)</h2><p class="lead">Each sentence is matched back to a source. A sentence with no source is flagged. Safety and policy rules are pass/fail. A failing draft never reaches the dashboard.</p>
+    <div class="legend"><span class="l1">[1]</span><span class="l2">[2]</span><span class="l3">[3]</span><span class="lx">unsupported</span></div>
+    <div class="out chk">
+      <div class="blk"><div class="l">For the nurse</div><p class="txt">${sent(a.nurse,true)}</p></div>
+      <div class="blk"><div class="l">Patient · English</div><p class="txt">${sent(a.en,true)}</p></div>
+    </div>
+    <div class="checks">${a.checks.map(([n,w,r,s])=>`<div class="check"><span class="ic ${s}">${s==="pass"?"✓":"✕"}</span><div><div class="n">${n}</div><div class="why">${w}</div></div><span class="res">${r}</span></div>`).join("")}</div>
+    ${a.blocked?`<div class="verdict bad">Blocked. The flagged sentence asserts a cause ("had a fall") that is not in the record or any retrieved document. The draft is logged for the technical owner and the clinician writes this note manually. This is the hallucination the gate exists to catch.</div>`:`<div class="verdict ok">All checks passed. Draft is placed on the dashboard for clinician review with its sources attached.</div>`}`;
+  }
+  if(step===5){
+    h=`<h2>Step 6 · Clinician review (gate 2)</h2><p class="lead">The nurse sees the draft with its sources and checks. Nothing reaches the patient until she approves. Her decision is logged and feeds monitoring: approve, edit and discard rates are the fast signals.</p>
+    <div class="out"><div class="blk"><div class="l">Patient · ${a.lang}</div><p class="txt ${a.ar?"ar":""}">${sent(a.ar||a.en,false)}</p></div></div>
+    <div class="actions"><button class="btn primary" data-d="approved">Approve draft</button><button class="btn" data-d="edited">Edit, then approve</button><button class="btn danger" data-d="discarded">Discard and write manually</button></div>
+    <pre class="log" id="log">${decision?logLine(decision):"Awaiting clinician decision…"}</pre>
+    ${decision?`<div class="verdict ok">Logged. ${decision==="approved"?"Instructions sent to the patient in "+a.lang+" and English. KPI 2 clock: written instructions within 48 h of alert, met.":decision==="edited"?"The edited version is sent; the diff is stored so repeated edits of the same kind can trigger a prompt refinement.":"The draft is discarded; a high discard rate on this draft type triggers an investigation."}</div>`:""}`;
+  }
+  body.innerHTML=h+nav();
+  const p=document.getElementById("prev"),n=document.getElementById("next");
+  if(p)p.onclick=()=>{step=Math.max(0,step-1);renderAll();};
+  if(n)n.onclick=()=>{step=Math.min(5,step+1);renderAll();};
+  body.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{decision=b.dataset.d;renderAll();});
+}
+function logLine(d){
+  const t=new Date();const ts=t.toISOString().slice(0,16).replace("T"," ");
+  return `${ts}  alert=${cur.id}  template=explain-v1.4  model=claude-opus-5-5  kb=2026-10-13\n${ts}  clinician=F.AlHosani  decision=${d}  groundedness=pass  safety=pass`;
+}
+function renderAll(){renderRail();renderSteps();renderBody();}
+renderAll();
+</script>
+
+
+</body>
+</html>
